@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <getopt.h>
+#include <limits.h>
 
 #ifdef DEBUG
 # define DPRINT(x, y) if (y & MODE_VERBOSE ) printf x 
@@ -20,11 +21,15 @@
 # define DPRINT(x, y) do {} while (0)
 #endif
 
-#define BG_DEFAULT_GRAMSIZE 3
+#define BG_DEFAULT_GRAMSIZE 2
 #define BG_DEFAULT_MAXFILES 200
 #define BG_DEFAULT_BUFFERSIZE 1500
+#define BG_DEFAULT_EDITDIST 0
 #define BG_LIMIT_BUFFERSIZE 8000
 #define BG_LIMIT_MAXFILES 18000
+#define BG_LIMIT_GRAMDATA (sizeof(unsigned char) << CHAR_BIT)
+#define BG_LIMIT_GRAMDATA_DEPTH 500
+#define BG_LIMIT_EDITDIST 5
 
 typedef enum { 
   MODE_DEFAULT = 0,
@@ -39,25 +44,33 @@ typedef struct {
   char *filename;
 } bg_file_t;
 
-typdef struct {
-
+typedef struct {
+  unsigned char *buf; //null indicates "End of Array"
+  int addr,offs; //start address/index,
+  int count;     //number of occurances,
 } gram_t;
 
 typedef struct {
   unsigned int maxfiles;
   unsigned int buffersize;
   unsigned int gramsize;
+  unsigned int editdist;
   opt_mask_t opt_mask;
-  int ind;
+  int ind; //for file
   bg_file_t **bg_file;
-  gram_t gram_hash[sizeof(unsigned char)];
+  gram_t gramdata[BG_LIMIT_GRAMDATA][BG_LIMIT_GRAMDATA_DEPTH];
 } bg_mem_t;
 
 
 int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffersize, int gramsize);
 int bg_mem_show(bg_mem_t *bg_mem);
+int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs);
+int bg_mem_addfile(bg_mem_t *bg_mem, bg_file_t *bg_file);
+int bg_mem_process(bg_mem_t *bg_mem);
+int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
 int bg_file_show(bg_file_t *bg_file);
+int gram_show(gram_t *g);
 
 void usage(char *cmdname)
 {
@@ -69,6 +82,9 @@ void usage(char *cmdname)
    	fprintf(stderr, "\t -g,--gramsize\tminimum size of a gram used in comparisons\n");
     fprintf(stderr, "\t -b,--buffersize\tchange max size for a file (default %d bytes)\n", BG_DEFAULT_BUFFERSIZE);
     fprintf(stderr, "\t -f,--maxfiles\tprocess up to maxfiles (default %d)\n\n", BG_DEFAULT_MAXFILES);
+   	fprintf(stderr, "\t -e,--editdist\tchange edit distance subtraction tolerance (default %d, max %d\n", 
+   																								BG_DEFAULT_EDITDIST,
+   																							  	BG_LIMIT_EDITDIST);    
     exit(EXIT_FAILURE);
 }
 
@@ -78,6 +94,7 @@ int main(int argc, char **argv)
 	int bg_mem_buffersize = BG_DEFAULT_BUFFERSIZE;
 	int bg_mem_maxfiles = BG_DEFAULT_MAXFILES;
 	int bg_mem_gramsize = BG_DEFAULT_GRAMSIZE;
+	int bg_mem_editdist = BG_DEFAULT_EDITDIST;
 	opt_mask_t opt_mask = MODE_DEFAULT;  // Default set
 	int option_index=0;
 
@@ -95,7 +112,7 @@ int main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	while ((opt = getopt_long(argc, argv, "vscg:b:f:",
+	while ((opt = getopt_long(argc, argv, "vsce:g:b:f:",
                       long_options, &option_index)) != -1)
 	{
 	    switch (opt)
@@ -144,6 +161,19 @@ int main(int argc, char **argv)
 			DPRINT(("arg %s\n", optarg), 1);
 	    	//printf
 	        break;
+	    case 'e':
+	    	bg_mem_editdist=atoi(optarg);
+			if(bg_mem_editdist>0 && bg_mem_editdist<BG_LIMIT_EDITDIST )
+				printf("Changing edit distance default to [%d] of subtraction tolerance\n", bg_mem_editdist);
+			else
+			{
+				fprintf(stderr, "main: invalid editdist, try any positive integer between 0 to %d\n", BG_LIMIT_EDITDIST);
+				return 1;
+			}
+			DPRINT(("arg %s\n", optarg), 1);
+	    	//printf
+	        break;
+
 
 	    default:
 	    	usage(argv[0]);
@@ -181,7 +211,7 @@ int main(int argc, char **argv)
 	       		printf("loading %s ...\n", argv[i]);
 	            bg_file_init(bg_file,fp, argv[i], opt_mask);
 	            if((bg_file->size > 0) && (bg_file->size <= bg_mem_buffersize))
-	            	bg_mem_add(&bg_mem, bg_file);
+	            	bg_mem_addfile(&bg_mem, bg_file);
 	            else
 	            {
 	            	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", bg_file->size, 
@@ -191,8 +221,8 @@ int main(int argc, char **argv)
 	            fclose(fp);
 	        }
 	    }
-	    bg_mem_show(&bg_mem);
 	    bg_mem_process(&bg_mem);
+	    bg_mem_show(&bg_mem);
 	}
 	bg_mem_close(&bg_mem);
 	return 0;
@@ -217,19 +247,68 @@ int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffers
 
 int bg_mem_show(bg_mem_t *bg_mem)
 {
-	int i;
+	int i,j;
 	printf("bf_mem->maxfiles: %d\n", bg_mem->maxfiles);
 	printf("bf_mem->buffersize: %d\n", bg_mem->buffersize);
 	printf("bf_mem->ind: %d\n", bg_mem->ind);
-	for(i=0; i<bg_mem->ind; i++)
+	for(i=0; i < bg_mem->ind; i++)
 		bg_file_show(bg_mem->bg_file[i]);
+
+	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
+		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
+	{
+		gram_show(&bg_mem->gramdata[i][j]);
+	}
+
 	return 0;
 }
 
-int bg_mem_add(bg_mem_t *bg_mem, bg_file_t *bg_file)
+int bg_mem_addfile(bg_mem_t *bg_mem, bg_file_t *bg_file)
 {
 	if( bg_mem->ind <= bg_mem->maxfiles )
 		bg_mem->bg_file[bg_mem->ind++]=bg_file;
+	return 0;
+}
+
+
+int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
+{
+	int ind=0;
+	int hashind=(int)buf[addr];
+	int match, nmatch;
+
+	while( (bg_mem->gramdata[hashind][ind].buf) )
+	{
+		int i;
+		match=1; 
+		nmatch=0;
+		for(i=1; (i < bg_mem->gramdata[hashind][ind].offs) && (i < offs) && (nmatch <= bg_mem->editdist); i++)
+		{
+			int gdind=bg_mem->gramdata[hashind][ind].addr;
+			printf("--->%02X\n", bg_mem->gramdata[hashind][ind].buf[gdind + i]);
+			//TODO: change for "byte aligned" hamming dist here (abs(buf1[a] - buf2[a]) < threshold)
+			if(bg_mem->gramdata[hashind][ind].buf[gdind + i] == buf[addr+i])
+				match++;
+			else
+				nmatch++;
+		}
+		//perfect match, nothing more to do
+		if((match == offs) && (match == bg_mem->gramdata[hashind][ind].offs))
+		{
+			bg_mem->gramdata[hashind][ind].count++;
+			return 0;
+		}
+		
+		//if((nmatch > bg_mem->editdist) && (match > bg_mem->gramsize)) //still good, move along..
+
+		ind++;
+		if(ind == BG_LIMIT_GRAMDATA_DEPTH) return 1;
+	}
+	DPRINT(("adding gram at %d, %c\n", ind, buf[addr]), bg_mem->opt_mask);
+	bg_mem->gramdata[hashind][ind].buf=buf;
+	bg_mem->gramdata[hashind][ind].addr=addr;
+	bg_mem->gramdata[hashind][ind].offs=offs;
+	bg_mem->gramdata[hashind][ind].count++;
 	return 0;
 }
 
@@ -273,17 +352,14 @@ int bg_mem_process(bg_mem_t *bg_mem)
                     DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
                     if(sequence >= bg_mem->gramsize)
                     {
-
+                    	DPRINT(("Adding gram\n"), bg_mem->opt_mask);
+                    	bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
                     }
                   }
 				  sequence=0;
 				}
-
 			}
-			
-
 		}
-
 	}
 		
 	return 0;
@@ -318,17 +394,17 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
     	printf("filename: %s, %d\n", filename, (int)st.st_size);
 		bg_file->size=(int)st.st_size;
 		bg_file->filename=filename;//strdup(filename);
-		bg_file->buf=(char *)malloc(sizeof(char)*bg_file->size);
+		bg_file->buf=(unsigned char *)malloc(sizeof(unsigned char)*bg_file->size);
 		if(!bg_file) 
 		{
-			fprintf(stderr, "bg_file_init: unable to allocate %d bytes for %s %d\n", bg_file->size, filename);
+			fprintf(stderr, "bg_file_init: unable to allocate %d bytes for %s\n", bg_file->size, filename);
 			return 1;
 		}
 		fread(bg_file->buf, sizeof(char), bg_file->size, f);
     } 
     else
     {
-    	fprintf(stderr, "bg_file_init: not a file of directory: %s\n", bg_file->size, filename);
+    	fprintf(stderr, "bg_file_init: not a file or directory: %s\n", filename);
     	return 1;
     }
 
@@ -344,7 +420,20 @@ int bg_file_show(bg_file_t *bg_file)
 	printf("bf_file->size: %d\n", bg_file->size);
 	printf("bf_file->buf:");
 	for(i=0; i< ((bg_file->size<10)?bg_file->size:10); i++)
-	  printf("%02X", bg_file->buf[i]);
+		printf("%02X", bg_file->buf[i]);
+	if(i==10) printf("...");
+	printf("\n");
+	return 0;
+}
+
+int gram_show(gram_t *g)
+{
+	int i;
+	if(!g) return 1;
+	if(!g->buf) return 1;
+	printf("gram addr(%d),offs(%d),cnt(%d), buf:", g->addr, g->offs, g->count);
+	for(i=0; i < g->offs; i++)
+		printf("%02X", g->buf[g->addr + i]);
 	printf("\n");
 	return 0;
 }
