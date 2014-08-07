@@ -293,8 +293,11 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 				nmatch++;
 		}
 		//perfect match, nothing more to do
-		if((match == offs) && (match == bg_mem->gramdata[hashind][ind].offs))
+		if((match == offs) && 
+		   (match == bg_mem->gramdata[hashind][ind].offs))
 		{
+			// return on overlapping with existing gram 
+			if(addr > (bg_mem->gramdata[hashind][ind].addr && addr < bg_mem->gramdata[hashind][ind].offs)) return 1;
 			bg_mem->gramdata[hashind][ind].count++;
 			return 0;
 		}
@@ -304,7 +307,7 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 		ind++;
 		if(ind == BG_LIMIT_GRAMDATA_DEPTH) return 1;
 	}
-	DPRINT(("adding gram at %d, %c\n", ind, buf[addr]), bg_mem->opt_mask);
+	DPRINT(("adding gram at %d, %c\n", addr, buf[addr]), bg_mem->opt_mask);
 	bg_mem->gramdata[hashind][ind].buf=buf;
 	bg_mem->gramdata[hashind][ind].addr=addr;
 	bg_mem->gramdata[hashind][ind].offs=offs;
@@ -341,19 +344,20 @@ int bg_mem_process(bg_mem_t *bg_mem)
 				ind2=y++;
 				if(f1->buf[ind1] == f2->buf[ind2])
 				{
-				  DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", ind1, f1->buf[ind1], f2->buf[ind2], ind2), 
-				  																   bg_mem->opt_mask);
+				  //DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", ind1, f1->buf[ind1], f2->buf[ind2], ind2), 
+				  	//																   bg_mem->opt_mask);
 				  sequence++;
 				}
 				else //end of sequence
 				{
 				  if(sequence > 0)
 				  {
-                    DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
+                    //DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
                     if(sequence >= bg_mem->gramsize)
                     {
                     	DPRINT(("Adding gram\n"), bg_mem->opt_mask);
-                    	bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
+                    	//bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
+                    	bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
                     }
                   }
 				  sequence=0;
