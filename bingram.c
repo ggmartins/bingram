@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 #include <limits.h>
+#include <dirent.h>
 
 #ifdef DEBUG
 # define DPRINT(x, y) if (y & MODE_VERBOSE ) printf x 
@@ -21,15 +22,16 @@
 # define DPRINT(x, y) do {} while (0)
 #endif
 
-#define BG_DEFAULT_GRAMSIZE 2
-#define BG_DEFAULT_MAXFILES 200
-#define BG_DEFAULT_BUFFERSIZE 1500
-#define BG_DEFAULT_EDITDIST 0
-#define BG_LIMIT_BUFFERSIZE 8000
-#define BG_LIMIT_MAXFILES 18000
-#define BG_LIMIT_GRAMDATA (sizeof(unsigned char) << CHAR_BIT)
-#define BG_LIMIT_GRAMDATA_DEPTH 500
-#define BG_LIMIT_EDITDIST 5
+#define BG_DEFAULT_GRAMSIZE		2
+#define BG_DEFAULT_MAXFILES		200
+#define BG_DEFAULT_BUFFERSIZE	1500
+#define BG_DEFAULT_EDITDIST		0
+#define BG_LIMIT_BUFFERSIZE		8000
+#define BG_LIMIT_MAXFILES		18000
+#define BG_LIMIT_GRAMDATA		(sizeof(unsigned char) << CHAR_BIT)
+#define BG_LIMIT_GRAMDATA_DEPTH	500
+#define BG_LIMIT_EDITDIST		5
+#define BG_LIMIT_FULLPATH		200
 
 typedef enum { 
   MODE_DEFAULT = 0,
@@ -65,7 +67,7 @@ typedef struct {
 int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffersize, int gramsize);
 int bg_mem_show(bg_mem_t *bg_mem);
 int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs);
-int bg_mem_addfile(bg_mem_t *bg_mem, bg_file_t *bg_file);
+int bg_mem_addfile(bg_mem_t *bg_mem, char *filename);
 int bg_mem_process(bg_mem_t *bg_mem);
 int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
@@ -180,7 +182,7 @@ int main(int argc, char **argv)
 	    }
 	}
 
-	DPRINT(("verbose mode on "), opt_mask);
+	DPRINT(("verbose mode on \n"), opt_mask);
 
 	/* Process file names or stdin */
 	if (optind >= argc)
@@ -190,37 +192,15 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-	    int i;
-	    bg_mem_init(&bg_mem, opt_mask, bg_mem_maxfiles, bg_mem_buffersize, bg_mem_gramsize);
-	    for (i = optind; i < argc; i++)
-	    {
+		int i;
 
-	        FILE *fp = fopen(argv[i], "r");
-	        if (fp == 0)
-	            fprintf(stderr, "%s: failed to open %s (%d %s)\n",
-	                    argv[0], argv[i], errno, strerror(errno));
-	        else
-	        {
-	        	bg_file_t *bg_file;
-	        	bg_file = (bg_file_t *)malloc(sizeof(bg_file_t));
-	        	if(!bg_file)
-	        	{
-	    			fprintf(stderr, "main: malloc failed\n");
-	        		return 1;
-	        	}
-	       		printf("loading %s ...\n", argv[i]);
-	            bg_file_init(bg_file,fp, argv[i], opt_mask);
-	            if((bg_file->size > 0) && (bg_file->size <= bg_mem_buffersize))
-	            	bg_mem_addfile(&bg_mem, bg_file);
-	            else
-	            {
-	            	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", bg_file->size, 
-	            		bg_mem_buffersize);
-	            	return 1;
-	            }
-	            fclose(fp);
-	        }
-	    }
+		bg_mem_init(&bg_mem, opt_mask, bg_mem_maxfiles, bg_mem_buffersize, bg_mem_gramsize);
+
+    	for (i = optind; i < argc; i++)
+    	{
+			bg_mem_addfile(&bg_mem, argv[i]);
+		}
+
 	    bg_mem_process(&bg_mem);
 	    bg_mem_show(&bg_mem);
 	}
@@ -263,10 +243,63 @@ int bg_mem_show(bg_mem_t *bg_mem)
 	return 0;
 }
 
-int bg_mem_addfile(bg_mem_t *bg_mem, bg_file_t *bg_file)
+
+int bg_mem_addfile(bg_mem_t *bg_mem, char *filename)
 {
-	if( bg_mem->ind <= bg_mem->maxfiles )
-		bg_mem->bg_file[bg_mem->ind++]=bg_file;
+	struct stat st;
+	stat(filename, &st);
+	if( st.st_mode & S_IFDIR )
+    {
+        //fprintf(stderr, "bg_file_init: directories not yet supported: %s\n", argv[i]);
+        DIR *dir;
+        struct dirent *ent;
+        char fullpath[BG_LIMIT_FULLPATH];
+		printf("loading dir %s ...\n", filename);
+		if ((dir = opendir (filename)) != NULL) 
+		{
+			int ret=1;
+			while ((ent = readdir (dir)) != NULL) 
+			if(ent->d_name[0]!='.')
+			{
+				snprintf(fullpath, BG_LIMIT_FULLPATH, "%s/%s", filename, ent->d_name);
+				printf("%s\n", fullpath);
+				ret=bg_mem_addfile(bg_mem, fullpath);
+			}
+			if(!ret) closedir(dir);
+		}
+    }
+    else if( st.st_mode & S_IFREG )
+    {
+	    FILE *fp = fopen(filename, "r");
+	    if (fp == 0)
+	        fprintf(stderr, "bg_mem_addfile: failed to open %s (%d %s)\n",
+	                filename, errno, strerror(errno));
+	    else
+	    {
+	    	bg_file_t *bg_file;
+	    	bg_file = (bg_file_t *)malloc(sizeof(bg_file_t));
+	    	if(!bg_file)
+	    	{
+				fprintf(stderr, "main: malloc failed\n");
+	    		return 1;
+	    	}
+	   		printf("loading file %s ...\n", filename);
+	        bg_file_init(bg_file,fp, filename, bg_mem->opt_mask);
+	        if((bg_file->size > 0) && (bg_file->size <= bg_mem->buffersize))
+	        {
+	        	if( bg_mem->ind <= bg_mem->maxfiles )
+					bg_mem->bg_file[bg_mem->ind++]=bg_file;
+	        }
+	        else
+	        {
+	        	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", bg_file->size, 
+	        		bg_mem->buffersize);
+	        	return 1;
+	        }
+	        fclose(fp);
+	    }
+	}
+
 	return 0;
 }
 
@@ -297,7 +330,10 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 		   (match == bg_mem->gramdata[hashind][ind].offs))
 		{
 			// return on overlapping with existing gram 
-			if(addr > (bg_mem->gramdata[hashind][ind].addr && addr < bg_mem->gramdata[hashind][ind].offs)) return 1;
+			//printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr);
+			//printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs);
+			if(addr < bg_mem->gramdata[hashind][ind].addr )
+				if( addr > bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs ) return 1;
 			bg_mem->gramdata[hashind][ind].count++;
 			return 0;
 		}
@@ -374,7 +410,11 @@ int bg_mem_close(bg_mem_t *bg_mem)
 {
 	int i;
 	for(i=0; i<bg_mem->ind; i++)
+	{
+		free(bg_mem->bg_file[i]->filename);
+		free(bg_mem->bg_file[i]->buf);
 		free(bg_mem->bg_file[i]);
+	}
 	return 0;
 }
 
@@ -390,15 +430,12 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 	}
 	struct stat st;
 	stat(filename, &st);
-	if( st.st_mode & S_IFDIR )
-    {
-        fprintf(stderr, "bg_file_init: directories not yet supported: %s\n", filename);
-    }
-    else if( st.st_mode & S_IFREG )
+
+    if( st.st_mode & S_IFREG )
     {
     	printf("filename: %s, %d\n", filename, (int)st.st_size);
 		bg_file->size=(int)st.st_size;
-		bg_file->filename=filename;//strdup(filename);
+		bg_file->filename=strdup(filename);
 		bg_file->buf=(unsigned char *)malloc(sizeof(unsigned char)*bg_file->size);
 		if(!bg_file) 
 		{
