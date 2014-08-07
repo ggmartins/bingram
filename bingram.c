@@ -344,19 +344,20 @@ int bg_mem_process(bg_mem_t *bg_mem)
 				ind2=y++;
 				if(f1->buf[ind1] == f2->buf[ind2])
 				{
-				  //DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", ind1, f1->buf[ind1], f2->buf[ind2], ind2), 
-				  	//																   bg_mem->opt_mask);
+				  DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", ind1, f1->buf[ind1], f2->buf[ind2], ind2), 
+				  																	   bg_mem->opt_mask);
 				  sequence++;
 				}
 				else //end of sequence
 				{
 				  if(sequence > 0)
 				  {
-                    //DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
+                    DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
                     if(sequence >= bg_mem->gramsize)
                     {
                     	DPRINT(("Adding gram\n"), bg_mem->opt_mask);
                     	//bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
+                    	if(!ind2) ind2=f2->size;
                     	bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
                     }
                   }
