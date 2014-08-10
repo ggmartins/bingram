@@ -32,6 +32,7 @@
 #define BG_LIMIT_GRAMDATA_DEPTH	500
 #define BG_LIMIT_EDITDIST		5
 #define BG_LIMIT_FULLPATH		200
+#define BG_LIMIT_FILEHIT		200
 
 typedef enum { 
   MODE_DEFAULT = 0,
@@ -41,16 +42,18 @@ typedef enum {
 } opt_mask_t;
 
 typedef struct {
-  int size;
-  unsigned char *buf;
-  char *filename;
-} bg_file_t;
-
-typedef struct {
   unsigned char *buf; //null indicates "End of Array"
   int addr,offs; //start address/index,
   int count;     //number of occurances,
 } gram_t;
+
+typedef struct {
+  int size;
+  int hit;
+  unsigned char *buf;
+  char *filename;
+  gram_t gram[BG_LIMIT_FILEHIT];
+} bg_file_t;
 
 typedef struct {
   unsigned int maxfiles;
@@ -72,6 +75,7 @@ int bg_mem_process(bg_mem_t *bg_mem);
 int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
 int bg_file_show(bg_file_t *bg_file);
+int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs);
 int gram_show(gram_t *g);
 
 void usage(char *cmdname)
@@ -228,17 +232,20 @@ int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffers
 int bg_mem_show(bg_mem_t *bg_mem)
 {
 	int i,j;
+	
 	printf("bf_mem->maxfiles: %d\n", bg_mem->maxfiles);
 	printf("bf_mem->buffersize: %d\n", bg_mem->buffersize);
 	printf("bf_mem->ind: %d\n", bg_mem->ind);
+	printf("1.---\n");
 	for(i=0; i < bg_mem->ind; i++)
 		bg_file_show(bg_mem->bg_file[i]);
-
+	printf("2.---\n");
 	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
 		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
 	{
 		gram_show(&bg_mem->gramdata[i][j]);
 	}
+	printf("3.---\n");
 
 	return 0;
 }
@@ -330,8 +337,8 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 		   (match == bg_mem->gramdata[hashind][ind].offs))
 		{
 			// return on overlapping with existing gram 
-			//printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr);
-			//printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs);
+			printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr);
+			printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs);
 			if(addr < bg_mem->gramdata[hashind][ind].addr )
 				if( addr > bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs ) return 1;
 			bg_mem->gramdata[hashind][ind].count++;
@@ -348,6 +355,16 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 	bg_mem->gramdata[hashind][ind].addr=addr;
 	bg_mem->gramdata[hashind][ind].offs=offs;
 	bg_mem->gramdata[hashind][ind].count++;
+	return 0;
+}
+
+int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs)
+{
+	//TODO replace ones with fewer matches
+	bg_file->gram[bg_file->hit].buf=buf;
+	bg_file->gram[bg_file->hit].addr=addr;
+	bg_file->gram[bg_file->hit].offs=offs;
+	if(bg_file->hit < BG_LIMIT_FILEHIT-1) bg_file->hit++;
 	return 0;
 }
 
@@ -391,10 +408,17 @@ int bg_mem_process(bg_mem_t *bg_mem)
                     DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
                     if(sequence >= bg_mem->gramsize)
                     {
+                    	int ret;
                     	DPRINT(("Adding gram\n"), bg_mem->opt_mask);
                     	//bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
                     	if(!ind2) ind2=f2->size;
-                    	bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
+                    	ret=bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
+                    	if(!ret)
+                    	{
+                    		bg_file_addgram(f1, f1->buf, ind1 - sequence, sequence);
+                    		bg_file_addgram(f2, f2->buf, ind2 - sequence, sequence);	
+                    	}
+                    	
                     }
                   }
 				  sequence=0;
@@ -459,12 +483,15 @@ int bg_file_show(bg_file_t *bg_file)
 	int i;
 	if(!bg_file) return 1;
 	printf("bf_file->name: %s\n", bg_file->filename);
+	printf("bf_file->hit: %d\n", bg_file->hit);
 	printf("bf_file->size: %d\n", bg_file->size);
 	printf("bf_file->buf:");
 	for(i=0; i< ((bg_file->size<10)?bg_file->size:10); i++)
 		printf("%02X", bg_file->buf[i]);
 	if(i==10) printf("...");
 	printf("\n");
+	for(i=0; i< bg_file->hit; i++)
+		gram_show(&bg_file->gram[i]);
 	return 0;
 }
 
