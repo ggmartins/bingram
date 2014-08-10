@@ -33,6 +33,7 @@
 #define BG_LIMIT_EDITDIST		5
 #define BG_LIMIT_FULLPATH		200
 #define BG_LIMIT_FILEHIT		200
+#define BG_LIMIT_HISTOGRAM		(sizeof(unsigned char) << CHAR_BIT)
 
 typedef enum { 
   MODE_DEFAULT = 0,
@@ -53,6 +54,7 @@ typedef struct {
   unsigned char *buf;
   char *filename;
   gram_t gram[BG_LIMIT_FILEHIT];
+  int histogram[BG_LIMIT_HISTOGRAM];
 } bg_file_t;
 
 typedef struct {
@@ -74,7 +76,7 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename);
 int bg_mem_process(bg_mem_t *bg_mem);
 int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
-int bg_file_show(bg_file_t *bg_file);
+int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask);
 int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs);
 int gram_show(gram_t *g);
 
@@ -118,7 +120,7 @@ int main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	while ((opt = getopt_long(argc, argv, "vsce:g:b:f:",
+	while ((opt = getopt_long(argc, argv, "ivsce:g:b:f:",
                       long_options, &option_index)) != -1)
 	{
 	    switch (opt)
@@ -236,16 +238,13 @@ int bg_mem_show(bg_mem_t *bg_mem)
 	printf("bf_mem->maxfiles: %d\n", bg_mem->maxfiles);
 	printf("bf_mem->buffersize: %d\n", bg_mem->buffersize);
 	printf("bf_mem->ind: %d\n", bg_mem->ind);
-	printf("1.---\n");
 	for(i=0; i < bg_mem->ind; i++)
-		bg_file_show(bg_mem->bg_file[i]);
-	printf("2.---\n");
+		bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask);
 	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
 		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
 	{
 		gram_show(&bg_mem->gramdata[i][j]);
 	}
-	printf("3.---\n");
 
 	return 0;
 }
@@ -337,10 +336,13 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 		   (match == bg_mem->gramdata[hashind][ind].offs))
 		{
 			// return on overlapping with existing gram 
-			printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr);
-			printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs);
+			//printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr);
+			//printf("## %d %d\n", addr, bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs);
 			if(addr < bg_mem->gramdata[hashind][ind].addr )
 				if( addr > bg_mem->gramdata[hashind][ind].addr-bg_mem->gramdata[hashind][ind].offs ) return 1;
+			bg_mem->gramdata[hashind][ind].buf=buf;
+			bg_mem->gramdata[hashind][ind].addr=addr;
+			bg_mem->gramdata[hashind][ind].offs=offs;
 			bg_mem->gramdata[hashind][ind].count++;
 			return 0;
 		}
@@ -444,10 +446,6 @@ int bg_mem_close(bg_mem_t *bg_mem)
 
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask)
 {
-	if (opt_mask & MODE_BYTECNT)
-	{
-	printf("bytecount\n");	
-	}
 	if (opt_mask & MODE_STRINGS)
 	{
 		printf("strings\n");
@@ -467,6 +465,16 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 			return 1;
 		}
 		fread(bg_file->buf, sizeof(char), bg_file->size, f);
+		if (opt_mask & MODE_BYTECNT)
+		{
+			int i;
+			DPRINT(("computing histogram... \n"), opt_mask);
+			for(i=0; i<bg_file->size; i++)
+			{
+				int ind=(int)bg_file->buf[i];
+				bg_file->histogram[ind]++;
+			}
+		}
     } 
     else
     {
@@ -478,7 +486,7 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 	return 0;
 }
 
-int bg_file_show(bg_file_t *bg_file)
+int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask)
 {
 	int i;
 	if(!bg_file) return 1;
@@ -488,10 +496,17 @@ int bg_file_show(bg_file_t *bg_file)
 	printf("bf_file->buf:");
 	for(i=0; i< ((bg_file->size<10)?bg_file->size:10); i++)
 		printf("%02X", bg_file->buf[i]);
-	if(i==10) printf("...");
+	if( i==10 ) printf("...");
 	printf("\n");
 	for(i=0; i< bg_file->hit; i++)
 		gram_show(&bg_file->gram[i]);
+	if( opt_mask & MODE_BYTECNT )
+	{
+		printf("bg_file->histogram:");
+		for(i=0; i< BG_LIMIT_HISTOGRAM; i++) 
+			printf("%d,",bg_file->histogram[i]);
+		printf("\n");	
+	}
 	return 0;
 }
 
