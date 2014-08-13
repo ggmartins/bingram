@@ -36,11 +36,9 @@
 #define BG_LIMIT_FILEHIT		200
 #define BG_LIMIT_HISTOGRAM		(sizeof(unsigned char) << CHAR_BIT)
 
-/*#define BG_JSON_BINGRAM {
 #include "bingram.c.json"
-}
-#define BG_JSON_FILE files.c.json
-#define BG_JSON_GRAM gram.c.json */
+#include "file.c.json"
+#include "gram.c.json"
 
 typedef enum { 
   MODE_DEFAULT = 0,
@@ -53,6 +51,7 @@ typedef struct {
   unsigned char *buf; //null indicates "End of Array"
   int addr,offs; //start address/index,
   int count;     //number of occurances,
+  char *out_json;
 } gram_t;
 
 typedef struct {
@@ -62,6 +61,7 @@ typedef struct {
   char *filename;
   gram_t gram[BG_LIMIT_FILEHIT];
   int histogram[BG_LIMIT_HISTOGRAM];
+  char *out_json;
 } bg_file_t;
 
 typedef struct {
@@ -73,6 +73,7 @@ typedef struct {
   int ind; //for file
   bg_file_t **bg_file;
   gram_t gramdata[BG_LIMIT_GRAMDATA][BG_LIMIT_GRAMDATA_DEPTH];
+  char *out_json;
 } bg_mem_t;
 
 

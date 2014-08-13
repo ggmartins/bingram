@@ -166,6 +166,7 @@ int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffers
 	bg_mem->buffersize=buffersize;
 	bg_mem->gramsize=gramsize;
 	bg_mem->opt_mask=opt_mask;
+	bg_mem->out_json=bg_mem_out;
 	return 0;
 }
 
@@ -398,6 +399,7 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 		bg_file->size=(int)st.st_size;
 		bg_file->filename=strdup(filename);
 		bg_file->buf=(unsigned char *)malloc(sizeof(unsigned char)*bg_file->size);
+		//bg_file->out_json=bg_file_out;
 		if(!bg_file) 
 		{
 			fprintf(stderr, "bg_file_init: unable to allocate %d bytes for %s\n", bg_file->size, filename);
