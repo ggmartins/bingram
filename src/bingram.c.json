@@ -1,9 +1,9 @@
-char *bg_mem_out= " {\"bingram\": {\n\
+char *bg_mem_out= "{\"bingram\": {\n\
     \"debug\": \"on\",\n\
-    \"file\": [\n\
+    \"file\": [\
         %s\n\
     ],\n\
     \"gram\": [\n\
         %s\n\
-    ],\n\
+    ]\n\
 }}\n";

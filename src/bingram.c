@@ -25,12 +25,12 @@ void usage(char *cmdname)
     fprintf(stderr, "\t -v,--verbose\tenable debug and verbose prints\n");
     fprintf(stderr, "\t -s,--strings\tprocess \"strings\" command output (alphanumeric) files\n");
     fprintf(stderr, "\t -i,--histogram\tsummary most common bytes found across files\n");
-   	fprintf(stderr, "\t -g,--gramsize\tminimum size of a gram used in comparisons\n");
+    fprintf(stderr, "\t -g,--gramsize\tminimum size of a gram used in comparisons\n");
     fprintf(stderr, "\t -b,--buffersize\tchange max size for a file (default %d bytes)\n", BG_DEFAULT_BUFFERSIZE);
     fprintf(stderr, "\t -f,--maxfiles\tprocess up to maxfiles (default %d)\n\n", BG_DEFAULT_MAXFILES);
-   	fprintf(stderr, "\t -e,--editdist\tchange edit distance subtraction tolerance (default %d, max %d\n", 
-   																								BG_DEFAULT_EDITDIST,
-   																							  	BG_LIMIT_EDITDIST);    
+    fprintf(stderr, "\t -e,--editdist\tchange edit distance subtraction tolerance (default %d, max %d)\n", 
+                                                                                      BG_DEFAULT_EDITDIST,
+                                                                                      BG_LIMIT_EDITDIST);
     exit(EXIT_FAILURE);
 }
 
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 	           DPRINT(("arg %s\n", optarg), 1);
 	        printf ("\n");
             break; 
-        case 's': opt_mask|=MODE_STRINGS; break;
+	    case 's': opt_mask|=MODE_STRINGS; break;
 	    case 'v': opt_mask|=MODE_VERBOSE; break;
 	    case 'i': opt_mask|=MODE_BYTECNT; break;
 	    case 'g':
@@ -140,8 +140,8 @@ int main(int argc, char **argv)
 
 		bg_mem_init(&bg_mem, opt_mask, bg_mem_maxfiles, bg_mem_buffersize, bg_mem_gramsize);
 
-    	for (i = optind; i < argc; i++)
-    	{
+		for (i = optind; i < argc; i++)
+		{
 			bg_mem_addfile(&bg_mem, argv[i]);
 		}
 
@@ -170,56 +170,37 @@ int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffers
 	return 0;
 }
 
-int bg_mem_show(bg_mem_t *bg_mem)
-{
-	int i,j;
-	char outbuf[2000];
-	printf("bf_mem->maxfiles: %d\n", bg_mem->maxfiles);
-	printf("bf_mem->buffersize: %d\n", bg_mem->buffersize);
-	printf("bf_mem->ind: %d\n", bg_mem->ind);
-	for(i=0; i < bg_mem->ind; i++)
-		bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, outbuf, 2000);
-	printf("bf_mem->grams:\n");
-	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
-		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
-	{
-		//gram_show(&bg_mem->gramdata[i][j]);
-	}
-
-	return 0;
-}
-
 
 int bg_mem_addfile(bg_mem_t *bg_mem, char *filename)
 {
-	struct stat st;
-	stat(filename, &st);
-	if( st.st_mode & S_IFDIR )
+    struct stat st;
+    stat(filename, &st);
+    if( st.st_mode & S_IFDIR )
     {
         //fprintf(stderr, "bg_file_init: directories not yet supported: %s\n", argv[i]);
         DIR *dir;
         struct dirent *ent;
         char fullpath[BG_LIMIT_FULLPATH];
-		printf("loading dir %s ...\n", filename);
-		if ((dir = opendir (filename)) != NULL) 
+	printf("loading dir %s ...\n", filename);
+	if ((dir = opendir (filename)) != NULL) 
+	{
+		int ret=1;
+		while ((ent = readdir (dir)) != NULL) 
+		if(ent->d_name[0]!='.')
 		{
-			int ret=1;
-			while ((ent = readdir (dir)) != NULL) 
-			if(ent->d_name[0]!='.')
-			{
-				snprintf(fullpath, BG_LIMIT_FULLPATH, "%s/%s", filename, ent->d_name);
-				printf("%s\n", fullpath);
-				ret=bg_mem_addfile(bg_mem, fullpath);
-			}
-			if(!ret) closedir(dir);
+			snprintf(fullpath, BG_LIMIT_FULLPATH, "%s/%s", filename, ent->d_name);
+			printf("%s\n", fullpath);
+			ret=bg_mem_addfile(bg_mem, fullpath);
 		}
+		if(!ret) closedir(dir);
+	}
     }
     else if( st.st_mode & S_IFREG )
     {
 	    FILE *fp = fopen(filename, "r");
 	    if (fp == 0)
 	        fprintf(stderr, "bg_mem_addfile: failed to open %s (%d %s)\n",
-	                filename, errno, strerror(errno));
+	                                     filename, errno, strerror(errno));
 	    else
 	    {
 	    	bg_file_t *bg_file;
@@ -350,27 +331,27 @@ int bg_mem_process(bg_mem_t *bg_mem)
 				{
 				  if(sequence > 0)
 				  {
-                    DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
-                    if(sequence >= bg_mem->gramsize)
-                    {
-                    	int ret;
-                    	DPRINT(("Adding gram\n"), bg_mem->opt_mask);
-                    	//bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
-                    	if(!ind2) ind2=f2->size;
-                    	ret=bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
-                    	if(!ret)
-                    	{
-                    		bg_file_addgram(f1, f1->buf, ind1 - sequence, sequence);
-                    		bg_file_addgram(f2, f2->buf, ind2 - sequence, sequence);	
-                    	}
+                    			DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
+                    			if(sequence >= bg_mem->gramsize)
+                    			{
+                    			  int ret;
+                    			  DPRINT(("Adding gram\n"), bg_mem->opt_mask);
+                    			  //bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
+                    			  if(!ind2) ind2=f2->size;
+                    			  ret=bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
+                    			  if(!ret)
+                    			  {
+                    				bg_file_addgram(f1, f1->buf, ind1 - sequence, sequence);
+                    				bg_file_addgram(f2, f2->buf, ind2 - sequence, sequence);	
+                    			  }
                     	
-                    }
-                  }
+                    			}
+                  		  }
 				  sequence=0;
-				}
-			}
-		}
-	}
+				} //if
+			} //fir ind
+		} //for k
+	} //for j
 		
 	return 0;
 }
@@ -389,12 +370,12 @@ int bg_mem_close(bg_mem_t *bg_mem)
 
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask)
 {
-	if (opt_mask & MODE_STRINGS)
-	{
-		printf("strings\n");
-	}
-	struct stat st;
-	stat(filename, &st);
+    if (opt_mask & MODE_STRINGS)
+    {
+	printf("strings\n");
+    }
+    struct stat st;
+    stat(filename, &st);
 
     if( st.st_mode & S_IFREG )
     {
@@ -427,14 +408,45 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
     }
 
 	
+    return 0;
+}
+
+int bg_mem_show(bg_mem_t *bg_mem)
+{
+	int i,j, size=BG_LIMIT_OUTBUF, offs=0;
+	char outbuf[BG_LIMIT_OUTBUF];
+	char jsonbuf[BG_LIMIT_OUTBUF];
+	/*printf("bf_mem->maxfiles: %d\n", bg_mem->maxfiles);
+	printf("bf_mem->buffersize: %d\n", bg_mem->buffersize);
+	printf("bf_mem->ind: %d\n", bg_mem->ind); */
+	for(i=0; (i < bg_mem->ind) && (offs < BG_LIMIT_OUTBUF); i++)
+	{
+		
+		bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, outbuf+offs, &size);
+		offs=size;
+		size=BG_LIMIT_OUTBUF;
+	}
+
+	if(outbuf[strlen(outbuf)-1] == ',') outbuf[strlen(outbuf)-1] = 0;
+	snprintf(jsonbuf, BG_LIMIT_OUTBUF, bg_mem->out_json, outbuf, "[0]");
+	printf("%s\n", jsonbuf);
+	/*printf("bf_mem->grams:\n");
+	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
+		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
+	{
+		//gram_show(&bg_mem->gramdata[i][j]);
+	}*/
+    
+
 	return 0;
 }
 
-int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int size)
+int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *size)
 {
 	int i; 
 	char gram[BG_LIMIT_BUFFERSIZE];
 	char gramdata[BG_LIMIT_BUFFERSIZE*2];
+	char histdata[BG_LIMIT_HISTBUF];
 	if(!bg_file) return 1;
 	/*printf("bf_file->name: %s\n", bg_file->filename);
 	printf("bf_file->hit: %d\n", bg_file->hit);
@@ -447,12 +459,23 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int size
 	for(i=0; i< bg_file->hit; i++)
 	{
 		gram_show(&bg_file->gram[i], gram, BG_LIMIT_BUFFERSIZE);
-		snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "%s,", gram);
+		snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
 	}
 	if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
 	
-	snprintf(outbuf, size, bg_file->out_json, bg_file->filename, bg_file->size, bg_file->hit, gramdata, "0,0,2...");
-	printf("%s\n", outbuf);
+	if( opt_mask & MODE_BYTECNT )
+	{
+		int ind=0;
+		//histdata[0]='[';
+		//histdata[1]=0;
+		for(i=0; i< BG_LIMIT_HISTOGRAM; i++)
+			ind+=snprintf(histdata+ind, BG_LIMIT_HISTBUF, "%d,", bg_file->histogram[i]);
+		if(histdata[strlen(histdata)-1]==',') histdata[strlen(histdata)-1] = 0; 
+	}
+	else { snprintf(histdata, 4, "0"); }
+	snprintf(outbuf, *size, bg_file->out_json, bg_file->filename, bg_file->size, bg_file->hit, gramdata, histdata);
+	*size=strlen(outbuf);
+	//printf("%s\n", outbuf);
 	/*if( opt_mask & MODE_BYTECNT )
 	{
 		printf("bg_file->histogram:");
