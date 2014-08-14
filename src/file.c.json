@@ -1,10 +1,9 @@
 char *bg_file_out = "\
         \"%s\": {\n\
-            \"number\": \"%d\",\n\
             \"size\": \"%d\",\n\
             \"hit\": \"%d\"\n\
             \"gram\": [\n\
-                %s\n\
+                %s\
             ],\n\
             \"histogram\": [%s]\n\
         },\n";

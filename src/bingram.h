@@ -84,8 +84,8 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename);
 int bg_mem_process(bg_mem_t *bg_mem);
 int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
-int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask);
+int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int size);
 int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs);
-int gram_show(gram_t *g);
+int gram_show(gram_t *g, char *outbuf, int size);
 
 #endif
