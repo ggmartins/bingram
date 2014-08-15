@@ -177,55 +177,55 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename)
     stat(filename, &st);
     if( st.st_mode & S_IFDIR )
     {
-        //fprintf(stderr, "bg_file_init: directories not yet supported: %s\n", argv[i]);
         DIR *dir;
         struct dirent *ent;
         char fullpath[BG_LIMIT_FULLPATH];
-	printf("loading dir %s ...\n", filename);
-	if ((dir = opendir (filename)) != NULL) 
-	{
-		int ret=1;
-		while ((ent = readdir (dir)) != NULL) 
-		if(ent->d_name[0]!='.')
+		DPRINT(("loading dir %s ...\n", filename), bg_mem->opt_mask);
+		if ((dir = opendir (filename)) != NULL) 
 		{
-			snprintf(fullpath, BG_LIMIT_FULLPATH, "%s/%s", filename, ent->d_name);
-			printf("%s\n", fullpath);
-			ret=bg_mem_addfile(bg_mem, fullpath);
+			int ret=1;
+			while ((ent = readdir (dir)) != NULL) 
+			if(ent->d_name[0]!='.')
+			{
+				snprintf(fullpath, BG_LIMIT_FULLPATH, "%s/%s", filename, ent->d_name);
+				DPRINT(("%s\n", fullpath), bg_mem->opt_mask);
+				ret=bg_mem_addfile(bg_mem, fullpath);
+			}
+			if(!ret) closedir(dir);
 		}
-		if(!ret) closedir(dir);
-	}
-    }
-    else if( st.st_mode & S_IFREG )
-    {
-	    FILE *fp = fopen(filename, "r");
-	    if (fp == 0)
-	        fprintf(stderr, "bg_mem_addfile: failed to open %s (%d %s)\n",
-	                                     filename, errno, strerror(errno));
-	    else
-	    {
-	    	bg_file_t *bg_file;
-	    	bg_file = (bg_file_t *)malloc(sizeof(bg_file_t));
-	    	if(!bg_file)
-	    	{
-				fprintf(stderr, "main: malloc failed\n");
-	    		return 1;
-	    	}
-	   		printf("loading file %s ...\n", filename);
-	        bg_file_init(bg_file,fp, filename, bg_mem->opt_mask);
-	        if((bg_file->size > 0) && (bg_file->size <= bg_mem->buffersize))
-	        {
-	        	if( bg_mem->ind <= bg_mem->maxfiles )
-					bg_mem->bg_file[bg_mem->ind++]=bg_file;
-	        }
-	        else
-	        {
-	        	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", bg_file->size, 
-	        		bg_mem->buffersize);
-	        	return 1;
-	        }
-	        fclose(fp);
 	    }
-	}
+	    else if( st.st_mode & S_IFREG )
+	    {
+		    FILE *fp = fopen(filename, "r");
+		    if (fp == 0)
+		        fprintf(stderr, "bg_mem_addfile: failed to open %s (%d %s)\n",
+		                                     filename, errno, strerror(errno));
+		    else
+		    {
+		    	bg_file_t *bg_file;
+		    	bg_file = (bg_file_t *)malloc(sizeof(bg_file_t));
+		    	if(!bg_file)
+		    	{
+					fprintf(stderr, "main: malloc failed\n");
+		    		return 1;
+		    	}
+		   		DPRINT(("loading file %s ...\n", filename), bg_mem->opt_mask);
+		        bg_file_init(bg_file,fp, filename, bg_mem->opt_mask);
+		        if((bg_file->size > 0) && (bg_file->size <= bg_mem->buffersize))
+		        {
+		        	if( bg_mem->ind <= bg_mem->maxfiles )
+						bg_mem->bg_file[bg_mem->ind++]=bg_file;
+		        }
+		        else
+		        {
+		        	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", 
+		        		bg_file->size, 
+		        		bg_mem->buffersize);
+		        	return 1;
+		        }
+		        fclose(fp);
+		    }
+		}
 
 	return 0;
 }
@@ -331,22 +331,21 @@ int bg_mem_process(bg_mem_t *bg_mem)
 				{
 				  if(sequence > 0)
 				  {
-                    			DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
-                    			if(sequence >= bg_mem->gramsize)
-                    			{
-                    			  int ret;
-                    			  DPRINT(("Adding gram\n"), bg_mem->opt_mask);
-                    			  //bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
-                    			  if(!ind2) ind2=f2->size;
-                    			  ret=bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
-                    			  if(!ret)
-                    			  {
-                    				bg_file_addgram(f1, f1->buf, ind1 - sequence, sequence);
-                    				bg_file_addgram(f2, f2->buf, ind2 - sequence, sequence);	
-                    			  }
-                    	
-                    			}
-                  		  }
+            			DPRINT(("end of sequence, size: %d\n", sequence), bg_mem->opt_mask);
+            			if(sequence >= bg_mem->gramsize)
+            			{
+            			  int ret;
+            			  DPRINT(("Adding gram\n"), bg_mem->opt_mask);
+            			  //bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
+            			  if(!ind2) ind2=f2->size;
+            			  ret=bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
+            			  if(!ret)
+            			  {
+            				bg_file_addgram(f1, f1->buf, ind1 - sequence, sequence);
+            				bg_file_addgram(f2, f2->buf, ind2 - sequence, sequence);	
+            			  }
+            			}
+                  }
 				  sequence=0;
 				} //if
 			} //fir ind
@@ -370,16 +369,17 @@ int bg_mem_close(bg_mem_t *bg_mem)
 
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask)
 {
-    if (opt_mask & MODE_STRINGS)
-    {
-	printf("strings\n");
-    }
     struct stat st;
     stat(filename, &st);
 
+    /*if (opt_mask & MODE_STRINGS)
+    {
+	printf("strings\n");
+    }*/
+
     if( st.st_mode & S_IFREG )
     {
-    	printf("filename: %s, %d\n", filename, (int)st.st_size);
+    	DPRINT(("filename: %s, %d\n", filename, (int)st.st_size), opt_mask);
 		bg_file->size=(int)st.st_size;
 		bg_file->filename=strdup(filename);
 		bg_file->buf=(unsigned char *)malloc(sizeof(unsigned char)*bg_file->size);
@@ -413,12 +413,33 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 
 int bg_mem_show(bg_mem_t *bg_mem)
 {
-	int i,j, size=BG_LIMIT_OUTBUF, offs=0;
+	int i,j,k, size=BG_LIMIT_OUTBUF, offs=0;
 	char outbuf[BG_LIMIT_OUTBUF];
 	char jsonbuf[BG_LIMIT_OUTBUF];
-	/*printf("bf_mem->maxfiles: %d\n", bg_mem->maxfiles);
-	printf("bf_mem->buffersize: %d\n", bg_mem->buffersize);
-	printf("bf_mem->ind: %d\n", bg_mem->ind); */
+	char gramdata[BG_LIMIT_OUTBUF];
+	char gram[BG_LIMIT_BUFFERSIZE];
+	
+
+	if(bg_mem->opt_mask & MODE_VERBOSE)
+	{	
+		printf("bg_mem->maxfiles: %d\n", bg_mem->maxfiles);
+		printf("bg_mem->buffersize: %d\n", bg_mem->buffersize);
+		printf("bg_mem->ind: %d\n", bg_mem->ind); 
+		printf("bg_mem->grams:\n");
+		for(i=0; i < BG_LIMIT_GRAMDATA; i++)
+			for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
+		{
+			gram_t *g=&bg_mem->gramdata[i][j];
+			if(g->buf) //continue;
+			{
+			printf("bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
+			for(k=0; k < g->offs; k++)
+				printf("%02X", g->buf[g->addr + k]);
+			printf("\n"); 
+			}
+		}
+	}
+
 	for(i=0; (i < bg_mem->ind) && (offs < BG_LIMIT_OUTBUF); i++)
 	{
 		
@@ -426,18 +447,23 @@ int bg_mem_show(bg_mem_t *bg_mem)
 		offs=size;
 		size=BG_LIMIT_OUTBUF;
 	}
-
 	if(outbuf[strlen(outbuf)-1] == ',') outbuf[strlen(outbuf)-1] = 0;
-	snprintf(jsonbuf, BG_LIMIT_OUTBUF, bg_mem->out_json, outbuf, "[0]");
-	printf("%s\n", jsonbuf);
-	/*printf("bf_mem->grams:\n");
+
 	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
 		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
-	{
-		//gram_show(&bg_mem->gramdata[i][j]);
-	}*/
-    
+		{
+			gram_t *g=&bg_mem->gramdata[i][j];
+			if(g->buf) //continue;
+			{
+				gram_show(g, bg_mem->opt_mask, gram, BG_LIMIT_BUFFERSIZE);
+				snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
 
+			}
+		}
+	if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
+
+	snprintf(jsonbuf, BG_LIMIT_OUTBUF, bg_mem->out_json, outbuf, gramdata);
+	printf("%s\n", jsonbuf);
 	return 0;
 }
 
@@ -448,17 +474,35 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *siz
 	char gramdata[BG_LIMIT_BUFFERSIZE*2];
 	char histdata[BG_LIMIT_HISTBUF];
 	if(!bg_file) return 1;
-	/*printf("bf_file->name: %s\n", bg_file->filename);
-	printf("bf_file->hit: %d\n", bg_file->hit);
-	printf("bf_file->size: %d\n", bg_file->size);
-	printf("bf_file->buf:");
-	for(i=0; i< ((bg_file->size<10)?bg_file->size:10); i++)
-		printf("%02X", bg_file->buf[i]);
-	if( i==10 ) printf("...");
-	printf("\n"); */
+	if(!bg_file->hit)
+	{
+		//*size=0;
+		return 1;
+	}
+	
+	if(opt_mask & MODE_VERBOSE)
+	{
+		printf("bg_file->name: %s\n", bg_file->filename);
+		printf("bg_file->hit: %d\n", bg_file->hit);
+		printf("bg_file->size: %d\n", bg_file->size);
+		printf("bg_file->buf:");
+		for(i=0; i< ((bg_file->size<10)?bg_file->size:10); i++)
+			printf("%02X", bg_file->buf[i]);
+		if( i==10 ) printf("...");
+		printf("\n"); 
+
+		if( opt_mask & MODE_BYTECNT )
+		{
+			printf("bg_file->histogram:");
+			for(i=0; i< BG_LIMIT_HISTOGRAM; i++) 
+				printf("%d,",bg_file->histogram[i]);
+			printf("\n");	
+		}
+	}
+
 	for(i=0; i< bg_file->hit; i++)
 	{
-		gram_show(&bg_file->gram[i], gram, BG_LIMIT_BUFFERSIZE);
+		gram_show(&bg_file->gram[i], opt_mask, gram, BG_LIMIT_BUFFERSIZE);
 		snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
 	}
 	if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
@@ -466,37 +510,29 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *siz
 	if( opt_mask & MODE_BYTECNT )
 	{
 		int ind=0;
-		//histdata[0]='[';
-		//histdata[1]=0;
 		for(i=0; i< BG_LIMIT_HISTOGRAM; i++)
 			ind+=snprintf(histdata+ind, BG_LIMIT_HISTBUF, "%d,", bg_file->histogram[i]);
 		if(histdata[strlen(histdata)-1]==',') histdata[strlen(histdata)-1] = 0; 
 	}
-	else { snprintf(histdata, 4, "0"); }
 	snprintf(outbuf, *size, bg_file->out_json, bg_file->filename, bg_file->size, bg_file->hit, gramdata, histdata);
 	*size=strlen(outbuf);
-	//printf("%s\n", outbuf);
-	/*if( opt_mask & MODE_BYTECNT )
-	{
-		printf("bg_file->histogram:");
-		for(i=0; i< BG_LIMIT_HISTOGRAM; i++) 
-			printf("%d,",bg_file->histogram[i]);
-		printf("\n");	
-	}*/
 
 	return 0;
 }
 
-int gram_show(gram_t *g, char *outbuf, int size)
+int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size)
 {
 	int i, ind=0;
 	if(!g) return 1;
 	if(!g->buf) return 1;
-	if(!outbuf || size < 0) return 1;
-	/*printf("gram addr(%d),offs(%d),cnt(%d), buf:", g->addr, g->offs, g->count);
-	for(i=0; i < g->offs; i++)
-		printf("%02X", g->buf[g->addr + i]);
-	printf("\n"); */
+	if(!outbuf || size <= 0) return 1;
+	if(opt_mask & MODE_VERBOSE)
+	{
+		printf("bg_gram addr(%d),offs(%d),cnt(%d), buf:", g->addr, g->offs, g->count);
+		for(i=0; i < g->offs; i++)
+			printf("%02X", g->buf[g->addr + i]);
+		printf("\n"); 
+	}
     ind+=snprintf(outbuf+ind, size, "\"");
 	for(i=0; (i < g->offs) && (size > 0) ; i++)
 	{

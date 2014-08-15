@@ -25,16 +25,18 @@
 
 #define BG_DEFAULT_GRAMSIZE		2
 #define BG_DEFAULT_MAXFILES		200
-#define BG_DEFAULT_BUFFERSIZE	1500
+#define BG_DEFAULT_BUFFERSIZE		1500
 #define BG_DEFAULT_EDITDIST		0
 #define BG_LIMIT_BUFFERSIZE		8000
 #define BG_LIMIT_MAXFILES		18000
 #define BG_LIMIT_GRAMDATA		(sizeof(unsigned char) << CHAR_BIT)
-#define BG_LIMIT_GRAMDATA_DEPTH	500
+#define BG_LIMIT_GRAMDATA_DEPTH		500
 #define BG_LIMIT_EDITDIST		5
 #define BG_LIMIT_FULLPATH		200
 #define BG_LIMIT_FILEHIT		200
 #define BG_LIMIT_HISTOGRAM		(sizeof(unsigned char) << CHAR_BIT)
+#define BG_LIMIT_OUTBUF			2000
+#define BG_LIMIT_HISTBUF		256*4+2
 
 #include "bingram.c.json"
 #include "file.c.json"
@@ -84,8 +86,8 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename);
 int bg_mem_process(bg_mem_t *bg_mem);
 int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
-int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int size);
+int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *size);
 int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs);
-int gram_show(gram_t *g, char *outbuf, int size);
+int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size);
 
 #endif
