@@ -193,39 +193,39 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename)
 			}
 			if(!ret) closedir(dir);
 		}
-	    }
-	    else if( st.st_mode & S_IFREG )
+	}
+	else if( st.st_mode & S_IFREG )
+    {
+	    FILE *fp = fopen(filename, "r");
+	    if (fp == 0)
+	        fprintf(stderr, "bg_mem_addfile: failed to open %s (%d %s)\n",
+	                                     filename, errno, strerror(errno));
+	    else
 	    {
-		    FILE *fp = fopen(filename, "r");
-		    if (fp == 0)
-		        fprintf(stderr, "bg_mem_addfile: failed to open %s (%d %s)\n",
-		                                     filename, errno, strerror(errno));
-		    else
-		    {
-		    	bg_file_t *bg_file;
-		    	bg_file = (bg_file_t *)malloc(sizeof(bg_file_t));
-		    	if(!bg_file)
-		    	{
-					fprintf(stderr, "main: malloc failed\n");
-		    		return 1;
-		    	}
-		   		DPRINT(("loading file %s ...\n", filename), bg_mem->opt_mask);
-		        bg_file_init(bg_file,fp, filename, bg_mem->opt_mask);
-		        if((bg_file->size > 0) && (bg_file->size <= bg_mem->buffersize))
-		        {
-		        	if( bg_mem->ind <= bg_mem->maxfiles )
-						bg_mem->bg_file[bg_mem->ind++]=bg_file;
-		        }
-		        else
-		        {
-		        	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", 
-		        		bg_file->size, 
-		        		bg_mem->buffersize);
-		        	return 1;
-		        }
-		        fclose(fp);
-		    }
-		}
+	    	bg_file_t *bg_file;
+	    	bg_file = (bg_file_t *)malloc(sizeof(bg_file_t));
+	    	if(!bg_file)
+	    	{
+				fprintf(stderr, "main: malloc failed\n");
+	    		return 1;
+	    	}
+	   		DPRINT(("loading file %s ...\n", filename), bg_mem->opt_mask);
+	        bg_file_init(bg_file,fp, filename, bg_mem->opt_mask);
+	        if((bg_file->size > 0) && (bg_file->size <= bg_mem->buffersize))
+	        {
+	        	if( bg_mem->ind <= bg_mem->maxfiles )
+					bg_mem->bg_file[bg_mem->ind++]=bg_file;
+	        }
+	        else
+	        {
+	        	fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", 
+	        		bg_file->size, 
+	        		bg_mem->buffersize);
+	        	return 1;
+	        }
+	        fclose(fp);
+	    }
+	}
 
 	return 0;
 }
@@ -274,7 +274,7 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
 		ind++;
 		if(ind == BG_LIMIT_GRAMDATA_DEPTH) return 1;
 	}
-	DPRINT(("adding gram at %d, %c\n", addr, buf[addr]), bg_mem->opt_mask);
+	DPRINT(("adding gram at %d, %02X\n", addr, buf[addr]), bg_mem->opt_mask);
 	bg_mem->gramdata[hashind][ind].buf=buf;
 	bg_mem->gramdata[hashind][ind].addr=addr;
 	bg_mem->gramdata[hashind][ind].offs=offs;
@@ -290,6 +290,7 @@ int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs)
 	bg_file->gram[bg_file->hit].addr=addr;
 	bg_file->gram[bg_file->hit].offs=offs;
 	bg_file->gram[bg_file->hit].out_json=gram_out;
+	bg_file->gram[bg_file->hit].count=1;
 	if(bg_file->hit < BG_LIMIT_FILEHIT-1) bg_file->hit++;
 	return 0;
 }
@@ -321,10 +322,11 @@ int bg_mem_process(bg_mem_t *bg_mem)
 			for (ind1=x; (ind1 < k) && (ind1 < f1->size); ind1++) 
 			{
 				ind2=y++;
+				//printf(".%d %d\n", ind1, ind2);
 				if(f1->buf[ind1] == f2->buf[ind2])
 				{
 				  DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", ind1, f1->buf[ind1], f2->buf[ind2], ind2), 
-				  																	   bg_mem->opt_mask);
+				  															bg_mem->opt_mask);
 				  sequence++;
 				}
 				else //end of sequence
@@ -338,11 +340,14 @@ int bg_mem_process(bg_mem_t *bg_mem)
             			  DPRINT(("Adding gram\n"), bg_mem->opt_mask);
             			  //bg_mem_addgram(bg_mem, f1->buf, ind1 - sequence, sequence);
             			  if(!ind2) ind2=f2->size;
+
             			  ret=bg_mem_addgram(bg_mem, f2->buf, ind2 - sequence, sequence);
             			  if(!ret)
             			  {
-            				bg_file_addgram(f1, f1->buf, ind1 - sequence, sequence);
-            				bg_file_addgram(f2, f2->buf, ind2 - sequence, sequence);	
+            			  	int addr1=((ind1 - sequence) < 0)?0:(ind1 - sequence);
+            			  	int addr2=((ind2 - sequence) < 0)?0:(ind2 - sequence);
+            				bg_file_addgram(f1, f1->buf, addr1, sequence);
+            				bg_file_addgram(f2, f2->buf, addr2, sequence);	
             			  }
             			}
                   }
@@ -432,18 +437,17 @@ int bg_mem_show(bg_mem_t *bg_mem)
 			gram_t *g=&bg_mem->gramdata[i][j];
 			if(g->buf) //continue;
 			{
-			printf("bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
-			for(k=0; k < g->offs; k++)
-				printf("%02X", g->buf[g->addr + k]);
-			printf("\n"); 
+				printf(">bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
+				for(k=0; k < g->offs; k++)
+					printf("%02X", g->buf[g->addr + k]);
+				printf("\n"); 
 			}
 		}
 	}
-
+	
 	for(i=0; (i < bg_mem->ind) && (offs < BG_LIMIT_OUTBUF); i++)
 	{
-		
-		bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, outbuf+offs, &size);
+		if(bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, outbuf+offs, &size)) continue;
 		offs=size;
 		size=BG_LIMIT_OUTBUF;
 	}
@@ -457,7 +461,6 @@ int bg_mem_show(bg_mem_t *bg_mem)
 			{
 				gram_show(g, bg_mem->opt_mask, gram, BG_LIMIT_BUFFERSIZE);
 				snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
-
 			}
 		}
 	if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
@@ -528,7 +531,7 @@ int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size)
 	if(!outbuf || size <= 0) return 1;
 	if(opt_mask & MODE_VERBOSE)
 	{
-		printf("bg_gram addr(%d),offs(%d),cnt(%d), buf:", g->addr, g->offs, g->count);
+		printf("bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
 		for(i=0; i < g->offs; i++)
 			printf("%02X", g->buf[g->addr + i]);
 		printf("\n"); 
