@@ -389,7 +389,7 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 		bg_file->filename=strdup(filename);
 		bg_file->buf=(unsigned char *)malloc(sizeof(unsigned char)*bg_file->size);
 		bg_file->out_json=bg_file_out;
-		if(!bg_file) 
+		if(!bg_file->buf) 
 		{
 			fprintf(stderr, "bg_file_init: unable to allocate %d bytes for %s\n", bg_file->size, filename);
 			return 1;
@@ -437,7 +437,7 @@ int bg_mem_show(bg_mem_t *bg_mem)
 			gram_t *g=&bg_mem->gramdata[i][j];
 			if(g->buf) //continue;
 			{
-				printf(">bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
+				printf(" bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
 				for(k=0; k < g->offs; k++)
 					printf("%02X", g->buf[g->addr + k]);
 				printf("\n"); 
@@ -448,11 +448,12 @@ int bg_mem_show(bg_mem_t *bg_mem)
 	for(i=0; (i < bg_mem->ind) && (offs < BG_LIMIT_OUTBUF); i++)
 	{
 		if(bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, outbuf+offs, &size)) continue;
+
 		offs=size;
 		size=BG_LIMIT_OUTBUF;
 	}
 	if(outbuf[strlen(outbuf)-1] == ',') outbuf[strlen(outbuf)-1] = 0;
-
+	
 	for(i=0; i < BG_LIMIT_GRAMDATA; i++)
 		for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
 		{
@@ -460,7 +461,7 @@ int bg_mem_show(bg_mem_t *bg_mem)
 			if(g->buf) //continue;
 			{
 				gram_show(g, bg_mem->opt_mask, gram, BG_LIMIT_BUFFERSIZE);
-				snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
+				snprintf(gramdata, BG_LIMIT_OUTBUF, "{%s},", gram);
 			}
 		}
 	if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
@@ -507,6 +508,7 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *siz
 	{
 		gram_show(&bg_file->gram[i], opt_mask, gram, BG_LIMIT_BUFFERSIZE);
 		snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
+
 	}
 	if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
 	
@@ -517,7 +519,9 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *siz
 			ind+=snprintf(histdata+ind, BG_LIMIT_HISTBUF, "%d,", bg_file->histogram[i]);
 		if(histdata[strlen(histdata)-1]==',') histdata[strlen(histdata)-1] = 0; 
 	}
+
 	snprintf(outbuf, *size, bg_file->out_json, bg_file->filename, bg_file->size, bg_file->hit, gramdata, histdata);
+	
 	*size=strlen(outbuf);
 
 	return 0;
@@ -537,13 +541,13 @@ int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size)
 		printf("\n"); 
 	}
     ind+=snprintf(outbuf+ind, size, "\"");
+
 	for(i=0; (i < g->offs) && (size > 0) ; i++)
 	{
 		ind+=snprintf(outbuf+ind, size, "%02X", g->buf[g->addr + i]);
 		size-=ind;
 	}
 	ind+=snprintf(outbuf+ind, size, "\"");
-
 	if(size < 0) return 1;
 	snprintf(outbuf+ind, size, g->out_json, g->addr, g->offs, g->count);
 

@@ -1,8 +1,6 @@
 #!/bin/sh
 
 echo "Running test1.."
-
-
 ./bingram ../test/t1 > ../test/t1.out.1.json
 jsonlint -v ../test/t1.out.1.json
 
@@ -22,6 +20,18 @@ jsonlint -v ../test/t2.out.2.json
 
 ./bingram -i ../test/t2 > ../test/t2.out.3.json
 jsonlint -v ../test/t2.out.3.json
+
+
+echo "Running test3.."
+./bingram ../test/t3 > ../test/t3.out.1.json
+jsonlint -v ../test/t3.out.1.json
+
+./bingram -v ../test/t3 | grep -v "bg_"> ../test/t3.out.2.json
+jsonlint -v ../test/t3.out.2.json
+
+./bingram -i ../test/t3 > ../test/t3.out.3.json
+jsonlint -v ../test/t3.out.3.json
+
 
 
 
