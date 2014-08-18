@@ -34,8 +34,8 @@
 #define BG_LIMIT_EDITDIST       5
 #define BG_LIMIT_FULLPATH       200
 #define BG_LIMIT_FILEHIT        200
-#define BG_LIMIT_HISTOGRAM      (sizeof(unsigned char) << CHAR_BIT)
-#define BG_LIMIT_OUTBUF         2000
+#define BG_LIMIT_HISTOGRAM      256
+#define BG_LIMIT_OUTBUF         2400
 #define BG_LIMIT_HISTBUF        256*4+2
 
 #include "bingram.c.json"

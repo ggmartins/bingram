@@ -218,7 +218,8 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename)
             }
             else
             {
-                fprintf(stderr, "main: invalid file size of %d, allowed: %d. Check -b option.\n", 
+                fprintf(stderr, "main: Warning! invalid file(%s) size of %d, allowed: %d. Check -b option.\n", 
+                    bg_file->filename,
                     bg_file->size, 
                     bg_mem->buffersize);
                 return 1;
@@ -274,7 +275,7 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
         ind++;
         if(ind == BG_LIMIT_GRAMDATA_DEPTH) return 1;
     }
-    printf("adding gram at %d, %02X\n", addr, buf[addr]);
+    DPRINT(("adding gram at %d, %02X\n", addr, buf[addr]), bg_mem->opt_mask);
     bg_mem->gramdata[hashind][ind].buf=buf;
     bg_mem->gramdata[hashind][ind].addr=addr;
     bg_mem->gramdata[hashind][ind].offs=offs;
@@ -298,7 +299,7 @@ int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs)
 int bg_mem_process(bg_mem_t *bg_mem)
 {
     bg_file_t *f1, *f2;
-    int i,j,k,l,ind1, ind2, flag_inv=0;
+    int i,j,k,l, flag_inv=0;
     for(i=0; i<bg_mem->ind; i++)
         for(j=i+1; j<bg_mem->ind; j++)
     {
@@ -321,6 +322,7 @@ int bg_mem_process(bg_mem_t *bg_mem)
             {
                 if(f1->buf[k+l] == f2->buf[l])
                 {
+                    DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", k+l, f1->buf[k+l], f2->buf[l], l), bg_mem->opt_mask);
                     sequence++;
                 }
                 else if(sequence > 0)
@@ -328,7 +330,8 @@ int bg_mem_process(bg_mem_t *bg_mem)
                     if(sequence >= bg_mem->gramsize)
                     {
                         int ret;
-                        ret=bg_mem_addgram(bg_mem, f1->buf, k+l-sequence, sequence);
+                        //ret=bg_mem_addgram(bg_mem, f1->buf, k+l-sequence, sequence);
+                        ret=bg_mem_addgram(bg_mem, f2->buf, l-sequence, sequence);
                         if(!ret)
                         {
                             bg_file_addgram(f1, f1->buf, k+l-sequence, sequence);
@@ -351,9 +354,10 @@ int bg_mem_process(bg_mem_t *bg_mem)
                             bg_file_addgram(f1, f1->buf, k+l-sequence, sequence);
                             bg_file_addgram(f2, f2->buf, l-sequence, sequence);
                         }
-                        sequence=0;
+                        
                     }       
             }
+            sequence=0;
         }//for k
 
         if(flag_inv)
@@ -372,6 +376,7 @@ int bg_mem_process(bg_mem_t *bg_mem)
             {
                 if(f1->buf[k+l] == f2->buf[l])
                 {
+                    DPRINT(("f1[%d]=%02X == %02X=f2[%d] \n", k+l, f1->buf[k+l], f2->buf[l], l), bg_mem->opt_mask);
                     sequence++;
                 }
                 else if(sequence > 0)
@@ -379,7 +384,7 @@ int bg_mem_process(bg_mem_t *bg_mem)
                     if(sequence >= bg_mem->gramsize)
                     {
                         int ret;
-                        ret=bg_mem_addgram(bg_mem, f1->buf, k+l-sequence, sequence);
+                        ret=bg_mem_addgram(bg_mem, f2->buf, l-sequence, sequence);
                         if(!ret)
                         {
                             bg_file_addgram(f1, f1->buf, k+l-sequence, sequence);
@@ -402,10 +407,11 @@ int bg_mem_process(bg_mem_t *bg_mem)
                             bg_file_addgram(f1, f1->buf, k+l-sequence, sequence);
                             bg_file_addgram(f2, f2->buf, l-sequence, sequence);
                         }
-                        sequence=0;
+                        
                     }       
             }
-        }
+            sequence=0;
+        }//for k
 
     } //for i+j
         
@@ -470,12 +476,14 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
 
 int bg_mem_show(bg_mem_t *bg_mem)
 {
-    int i,j,k, size=BG_LIMIT_OUTBUF, offs=0;
+    int i,j,k, size=BG_LIMIT_OUTBUF;
     char outbuf[BG_LIMIT_OUTBUF];
     char jsonbuf[BG_LIMIT_OUTBUF];
     char gramdata[BG_LIMIT_OUTBUF];
-    char gram[BG_LIMIT_BUFFERSIZE];
+    char tmpbuf[BG_LIMIT_BUFFERSIZE];
     
+    memset(gramdata, 0, BG_LIMIT_OUTBUF);
+    memset(tmpbuf, 0, BG_LIMIT_BUFFERSIZE);
 
     if(bg_mem->opt_mask & MODE_VERBOSE)
     {   
@@ -496,12 +504,12 @@ int bg_mem_show(bg_mem_t *bg_mem)
             }
         }
     }
-    
-    for(i=0; (i < bg_mem->ind) && (offs < BG_LIMIT_OUTBUF); i++)
-    {
-        if(bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, outbuf+offs, &size)) continue;
 
-        offs=size;
+    for(i=0; (i < bg_mem->ind); i++)
+    {
+        if(bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, tmpbuf, &size)) continue;
+        strncat(outbuf, tmpbuf, BG_LIMIT_OUTBUF-strlen(gramdata-1));
+        //offs=size;
         size=BG_LIMIT_OUTBUF;
     }
     if(outbuf[strlen(outbuf)-1] == ',') outbuf[strlen(outbuf)-1] = 0;
@@ -512,8 +520,12 @@ int bg_mem_show(bg_mem_t *bg_mem)
             gram_t *g=&bg_mem->gramdata[i][j];
             if(g->buf) //continue;
             {
-                gram_show(g, bg_mem->opt_mask, gram, BG_LIMIT_BUFFERSIZE);
-                snprintf(gramdata, BG_LIMIT_OUTBUF, "{%s},", gram);
+                gram_show(g, bg_mem->opt_mask, tmpbuf, BG_LIMIT_BUFFERSIZE);
+                strncat(gramdata, "{", 1);
+                strncat(gramdata, tmpbuf, BG_LIMIT_OUTBUF-strlen(gramdata-1));
+                strncat(gramdata, "},", 2);
+                //snprintf(gramdata, BG_LIMIT_OUTBUF, "{%s},", gram);
+                //printf("%s\n", gramdata);
             }
         }
     if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
@@ -564,11 +576,17 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *siz
     }
     if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
     
+
     if( opt_mask & MODE_BYTECNT )
     {
-        int ind=0;
+        memset(histdata, 0, BG_LIMIT_HISTBUF);
         for(i=0; i< BG_LIMIT_HISTOGRAM; i++)
-            ind+=snprintf(histdata+ind, BG_LIMIT_HISTBUF, "%d,", bg_file->histogram[i]);
+        {
+            char count[5];
+            snprintf(count, 5, "%d,", bg_file->histogram[i]);
+            strncat(histdata, count, BG_LIMIT_HISTOGRAM-strlen(histdata)-1);
+        }
+            
         if(histdata[strlen(histdata)-1]==',') histdata[strlen(histdata)-1] = 0; 
     }
 
@@ -578,6 +596,9 @@ int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *siz
 
     return 0;
 }
+
+
+
 
 int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size)
 {
@@ -605,4 +626,3 @@ int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size)
 
     return 0;
 }
-
