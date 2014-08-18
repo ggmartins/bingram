@@ -1,9 +1,9 @@
 #ifndef BINGRAM_H
 #define BINGRAM_H
 /*
- *	bingram.c - command for finding common sequences of bytes (grams) across multiple binary files.
+ *  bingram.c - command for finding common sequences of bytes (grams) across multiple binary files.
  *
- *	Author: Guilherme G. Martins <gmartins at cc gatech dot edu>
+ *  Author: Guilherme G. Martins <gmartins at cc gatech dot edu>
  *
  *  
  */
@@ -23,20 +23,20 @@
 # define DPRINT(x, y) do {} while (0)
 #endif
 
-#define BG_DEFAULT_GRAMSIZE		2
-#define BG_DEFAULT_MAXFILES		200
-#define BG_DEFAULT_BUFFERSIZE		1500
-#define BG_DEFAULT_EDITDIST		0
-#define BG_LIMIT_BUFFERSIZE		8000
-#define BG_LIMIT_MAXFILES		18000
-#define BG_LIMIT_GRAMDATA		(sizeof(unsigned char) << CHAR_BIT)
-#define BG_LIMIT_GRAMDATA_DEPTH		500
-#define BG_LIMIT_EDITDIST		5
-#define BG_LIMIT_FULLPATH		200
-#define BG_LIMIT_FILEHIT		200
-#define BG_LIMIT_HISTOGRAM		(sizeof(unsigned char) << CHAR_BIT)
-#define BG_LIMIT_OUTBUF			2000
-#define BG_LIMIT_HISTBUF		256*4+2
+#define BG_DEFAULT_GRAMSIZE     2
+#define BG_DEFAULT_MAXFILES     200
+#define BG_DEFAULT_BUFFERSIZE   1500
+#define BG_DEFAULT_EDITDIST     0
+#define BG_LIMIT_BUFFERSIZE     8000
+#define BG_LIMIT_MAXFILES       18000
+#define BG_LIMIT_GRAMDATA       (sizeof(unsigned char) << CHAR_BIT)
+#define BG_LIMIT_GRAMDATA_DEPTH 500
+#define BG_LIMIT_EDITDIST       5
+#define BG_LIMIT_FULLPATH       200
+#define BG_LIMIT_FILEHIT        200
+#define BG_LIMIT_HISTOGRAM      (sizeof(unsigned char) << CHAR_BIT)
+#define BG_LIMIT_OUTBUF         2000
+#define BG_LIMIT_HISTBUF        256*4+2
 
 #include "bingram.c.json"
 #include "file.c.json"
