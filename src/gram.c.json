@@ -1,5 +1,0 @@
-char *gram_out= ": {\n\
-                    \"addr\": \"%d\",\n\
-                    \"offs\": \"%d\",\n\
-                    \"cnt\": \"%d\"\n\
-                }";

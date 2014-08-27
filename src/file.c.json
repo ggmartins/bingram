@@ -1,9 +1,0 @@
-char *bg_file_out = "\n\
-        {\"%s\": {\n\
-            \"size\": \"%d\",\n\
-            \"hit\": \"%d\",\n\
-            \"gram\": [\n\
-                %s\
-            ],\n\
-            \"histogram\": [%s]\n\
-        }},";

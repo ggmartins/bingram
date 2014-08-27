@@ -38,10 +38,6 @@
 #define BG_LIMIT_OUTBUF         2400
 #define BG_LIMIT_HISTBUF        256*4+2
 
-#include "bingram.c.json"
-#include "file.c.json"
-#include "gram.c.json"
-
 typedef enum { 
   MODE_DEFAULT = 0,
   MODE_VERBOSE = 0x01,
@@ -53,7 +49,7 @@ typedef struct {
   unsigned char *buf; //null indicates "End of Array"
   int addr,offs; //start address/index,
   int count;     //number of occurances,
-  char *out_json;
+  //char *out_json;
 } gram_t;
 
 typedef struct {
@@ -63,7 +59,7 @@ typedef struct {
   char *filename;
   gram_t gram[BG_LIMIT_FILEHIT];
   int histogram[BG_LIMIT_HISTOGRAM];
-  char *out_json;
+  //char *out_json;
 } bg_file_t;
 
 typedef struct {
@@ -75,7 +71,7 @@ typedef struct {
   int ind; //for file
   bg_file_t **bg_file;
   gram_t gramdata[BG_LIMIT_GRAMDATA][BG_LIMIT_GRAMDATA_DEPTH];
-  char *out_json;
+  //char *out_json;
 } bg_mem_t;
 
 
@@ -86,8 +82,7 @@ int bg_mem_addfile(bg_mem_t *bg_mem, char *filename);
 int bg_mem_process(bg_mem_t *bg_mem);
 int bg_mem_close(bg_mem_t *bg_mem);
 int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mask);
-int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *size);
 int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs);
-int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size);
+
 
 #endif

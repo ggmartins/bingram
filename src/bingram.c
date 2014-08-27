@@ -16,6 +16,22 @@
 #include <limits.h>
 #include <dirent.h>
 #include "bingram.h"
+#include "json.h"
+
+#define GRAM2JSON(g) do {\
+        if(g->buf)\
+        {\
+            json_object *jobj_gram = json_object_new_object();\
+            json_object *jobj_params = json_object_new_object();\
+            for(k=0; k < g->offs; k++)\
+                snprintf(gramdata+(k*2), 3, "%02X", g->buf[g->addr + k]);\
+            json_object_object_add(jobj_params, "addr", json_object_new_int(g->addr));\
+            json_object_object_add(jobj_params, "offs", json_object_new_int(g->offs));\
+            json_object_object_add(jobj_params, "cnt", json_object_new_int(g->count));\
+            json_object_object_add(jobj_gram, gramdata, jobj_params);\
+            json_object_array_add(jarr_gram, jobj_gram);\
+        }\
+} while (0)\
 
 
 void usage(char *cmdname)
@@ -166,7 +182,6 @@ int bg_mem_init(bg_mem_t *bg_mem, opt_mask_t opt_mask, int maxfiles, int buffers
     bg_mem->buffersize=buffersize;
     bg_mem->gramsize=gramsize;
     bg_mem->opt_mask=opt_mask;
-    bg_mem->out_json=bg_mem_out;
     return 0;
 }
 
@@ -266,7 +281,6 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
             bg_mem->gramdata[hashind][ind].addr=addr;
             bg_mem->gramdata[hashind][ind].offs=offs;
             bg_mem->gramdata[hashind][ind].count++;
-            bg_mem->gramdata[hashind][ind].out_json=gram_out;
             return 0;
         }
         
@@ -280,7 +294,6 @@ int bg_mem_addgram(bg_mem_t *bg_mem, unsigned char *buf, int addr, int offs)
     bg_mem->gramdata[hashind][ind].addr=addr;
     bg_mem->gramdata[hashind][ind].offs=offs;
     bg_mem->gramdata[hashind][ind].count++;
-    bg_mem->gramdata[hashind][ind].out_json=gram_out;
     return 0;
 }
 
@@ -290,7 +303,6 @@ int bg_file_addgram(bg_file_t *bg_file, unsigned char *buf, int addr, int offs)
     bg_file->gram[bg_file->hit].buf=buf;
     bg_file->gram[bg_file->hit].addr=addr;
     bg_file->gram[bg_file->hit].offs=offs;
-    bg_file->gram[bg_file->hit].out_json=gram_out;
     bg_file->gram[bg_file->hit].count=1;
     if(bg_file->hit < BG_LIMIT_FILEHIT-1) bg_file->hit++;
     return 0;
@@ -446,7 +458,6 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
         bg_file->size=(int)st.st_size;
         bg_file->filename=strdup(filename);
         bg_file->buf=(unsigned char *)malloc(sizeof(unsigned char)*bg_file->size);
-        bg_file->out_json=bg_file_out;
         if(!bg_file->buf) 
         {
             fprintf(stderr, "bg_file_init: unable to allocate %d bytes for %s\n", bg_file->size, filename);
@@ -468,23 +479,32 @@ int bg_file_init(bg_file_t *bg_file, FILE *f, char *filename, opt_mask_t opt_mas
     {
         fprintf(stderr, "bg_file_init: not a file or directory: %s\n", filename);
         return 1;
-    }
-
-    
+    }    
     return 0;
+}
+
+json_object *json_get_key_val(char *key, int val)
+{
+    json_object *jobj=json_object_new_object();
+    json_object_object_add(jobj, key, json_object_new_int(val));
+
+    return jobj;
 }
 
 int bg_mem_show(bg_mem_t *bg_mem)
 {
-    int i,j,k, size=BG_LIMIT_OUTBUF;
-    char outbuf[BG_LIMIT_OUTBUF];
-    char jsonbuf[BG_LIMIT_OUTBUF];
+    int i,j,k;
     char gramdata[BG_LIMIT_OUTBUF];
-    char tmpbuf[BG_LIMIT_BUFFERSIZE];
-    
-    memset(gramdata, 0, BG_LIMIT_OUTBUF);
-    memset(tmpbuf, 0, BG_LIMIT_BUFFERSIZE);
 
+    json_object *jobj = json_object_new_object();
+    json_object *jobj_bingram = json_object_new_object();
+    json_object *jstr_debug = json_object_new_string("on");
+    json_object *jarr_gram = json_object_new_array();
+    json_object *jarr_file = json_object_new_array();
+
+    memset(gramdata, 0, BG_LIMIT_OUTBUF);
+
+    // ******* DEBUG OUTPUT ***************************************************
     if(bg_mem->opt_mask & MODE_VERBOSE)
     {   
         printf("bg_mem->maxfiles: %d\n", bg_mem->maxfiles);
@@ -505,124 +525,81 @@ int bg_mem_show(bg_mem_t *bg_mem)
         }
     }
 
-    for(i=0; (i < bg_mem->ind); i++)
-    {
-        if(bg_file_show(bg_mem->bg_file[i], bg_mem->opt_mask, tmpbuf, &size)) continue;
-        strncat(outbuf, tmpbuf, BG_LIMIT_OUTBUF-strlen(gramdata-1));
-        //offs=size;
-        size=BG_LIMIT_OUTBUF;
-    }
-    if(outbuf[strlen(outbuf)-1] == ',') outbuf[strlen(outbuf)-1] = 0;
-    
+    // ******* JSON OUTPUT ****************************************************
     for(i=0; i < BG_LIMIT_GRAMDATA; i++)
         for(j=0; j < BG_LIMIT_GRAMDATA_DEPTH; j++)
+    {
+        gram_t *g=&bg_mem->gramdata[i][j];
+        GRAM2JSON(g);
+    }
+    
+    for(i=0; (i < bg_mem->ind); i++)
+    {
+        bg_file_t *bg_file=bg_mem->bg_file[i];
+        json_object *jobj_file;
+        json_object *jobj_params;
+        json_object *jarr_gram;
+        json_object *jarr_histogram;
+
+        if(!bg_file) continue;
+        if(!bg_file->hit) continue;
+
+        jobj_file = json_object_new_object();
+        jobj_params = json_object_new_object();
+        jarr_gram = json_object_new_array();
+        jarr_histogram = json_object_new_array();
+
+        json_object_object_add(jobj_params, "hit", json_object_new_int(bg_file->hit));
+        json_object_object_add(jobj_params, "size", json_object_new_int(bg_file->size));
+        json_object_object_add(jobj_params, "histogram", jarr_histogram);
+        json_object_object_add(jobj_params, "gram", jarr_gram);
+
+        if(bg_mem->opt_mask & MODE_VERBOSE)
         {
-            gram_t *g=&bg_mem->gramdata[i][j];
-            if(g->buf) //continue;
+            printf("bg_file->name: %s\n", bg_file->filename);
+            printf("bg_file->hit: %d\n", bg_file->hit);
+            printf("bg_file->size: %d\n", bg_file->size);
+            printf("bg_file->buf:");
+            for(j=0; j< ((bg_file->size<10)?bg_file->size:10); j++)
+                printf("%02X", bg_file->buf[j]);
+            if( j==10 ) printf("...");
+            printf("\n");
+        }
+
+        if( bg_mem->opt_mask & MODE_BYTECNT )
+        {
+            if(bg_mem->opt_mask & MODE_VERBOSE)
             {
-                gram_show(g, bg_mem->opt_mask, tmpbuf, BG_LIMIT_BUFFERSIZE);
-                strncat(gramdata, "{", 1);
-                strncat(gramdata, tmpbuf, BG_LIMIT_OUTBUF-strlen(gramdata-1));
-                strncat(gramdata, "},", 2);
-                //snprintf(gramdata, BG_LIMIT_OUTBUF, "{%s},", gram);
-                //printf("%s\n", gramdata);
+
+                printf("bg_file->histogram:");
+                for(k=0; k< BG_LIMIT_HISTOGRAM; k++)
+                    printf("%d,",bg_file->histogram[k]);
+                printf("\n");
             }
+            for(k=0; k< BG_LIMIT_HISTOGRAM; k++)
+                json_object_array_add(jarr_histogram, json_object_new_int(bg_file->histogram[k]));
         }
-    if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
 
-    snprintf(jsonbuf, BG_LIMIT_OUTBUF, bg_mem->out_json, outbuf, gramdata);
-    printf("%s\n", jsonbuf);
-    return 0;
-}
-
-int bg_file_show(bg_file_t *bg_file, opt_mask_t opt_mask, char *outbuf, int *size)
-{
-    int i; 
-    char gram[BG_LIMIT_BUFFERSIZE];
-    char gramdata[BG_LIMIT_BUFFERSIZE*2];
-    char histdata[BG_LIMIT_HISTBUF];
-    if(!bg_file) return 1;
-    if(!bg_file->hit)
-    {
-        //*size=0;
-        return 1;
-    }
-    
-    if(opt_mask & MODE_VERBOSE)
-    {
-        printf("bg_file->name: %s\n", bg_file->filename);
-        printf("bg_file->hit: %d\n", bg_file->hit);
-        printf("bg_file->size: %d\n", bg_file->size);
-        printf("bg_file->buf:");
-        for(i=0; i< ((bg_file->size<10)?bg_file->size:10); i++)
-            printf("%02X", bg_file->buf[i]);
-        if( i==10 ) printf("...");
-        printf("\n"); 
-
-        if( opt_mask & MODE_BYTECNT )
+        for(j=0; j< bg_file->hit; j++)
         {
-            printf("bg_file->histogram:");
-            for(i=0; i< BG_LIMIT_HISTOGRAM; i++) 
-                printf("%d,",bg_file->histogram[i]);
-            printf("\n");   
+            gram_t *g=&bg_file->gram[j];
+            GRAM2JSON(g);
         }
+
+        json_object_object_add(jobj_file, bg_file->filename, jobj_params);
+        json_object_array_add(jarr_file, jobj_file);
     }
 
-    for(i=0; i< bg_file->hit; i++)
-    {
-        gram_show(&bg_file->gram[i], opt_mask, gram, BG_LIMIT_BUFFERSIZE);
-        snprintf(gramdata, BG_LIMIT_BUFFERSIZE, "{%s},", gram);
 
-    }
-    if(gramdata[strlen(gramdata)-1] == ',') gramdata[strlen(gramdata)-1] = 0;
-    
+    json_object_object_add(jobj,"bingram", jobj_bingram);
+    json_object_object_add(jobj_bingram,"debug", jstr_debug);
+    json_object_object_add(jobj_bingram,"file", jarr_file);
+    json_object_object_add(jobj_bingram,"gram", jarr_gram);
 
-    if( opt_mask & MODE_BYTECNT )
-    {
-        memset(histdata, 0, BG_LIMIT_HISTBUF);
-        for(i=0; i< BG_LIMIT_HISTOGRAM; i++)
-        {
-            char count[5];
-            snprintf(count, 5, "%d,", bg_file->histogram[i]);
-            strncat(histdata, count, BG_LIMIT_HISTOGRAM-strlen(histdata)-1);
-        }
-            
-        if(histdata[strlen(histdata)-1]==',') histdata[strlen(histdata)-1] = 0; 
-    }
-
-    snprintf(outbuf, *size, bg_file->out_json, bg_file->filename, bg_file->size, bg_file->hit, gramdata, histdata);
-    
-    *size=strlen(outbuf);
+    //printf ("%s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PLAIN));
+    printf ("%s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+    json_object_put(jobj);
 
     return 0;
 }
 
-
-
-
-int gram_show(gram_t *g, opt_mask_t opt_mask, char *outbuf, int size)
-{
-    int i, ind=0;
-    if(!g) return 1;
-    if(!g->buf) return 1;
-    if(!outbuf || size <= 0) return 1;
-    if(opt_mask & MODE_VERBOSE)
-    {
-        printf("bg_gram->addr(%d),offs(%d),cnt(%d),buf:", g->addr, g->offs, g->count);
-        for(i=0; i < g->offs; i++)
-            printf("%02X", g->buf[g->addr + i]);
-        printf("\n"); 
-    }
-    ind+=snprintf(outbuf+ind, size, "\"");
-
-    for(i=0; (i < g->offs) && (size > 0) ; i++)
-    {
-        ind+=snprintf(outbuf+ind, size, "%02X", g->buf[g->addr + i]);
-        size-=ind;
-    }
-    ind+=snprintf(outbuf+ind, size, "\"");
-    if(size < 0) return 1;
-    snprintf(outbuf+ind, size, g->out_json, g->addr, g->offs, g->count);
-
-    return 0;
-}
