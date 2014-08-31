@@ -15,6 +15,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <dirent.h>
+#include "../config.h"
 #include "bingram.h"
 #include "json.h"
 
@@ -42,6 +43,7 @@ void usage(char *cmdname)
     fprintf(stderr, "\t -s,--strings\tprocess \"strings\" command output (alphanumeric) files\n");
     fprintf(stderr, "\t -i,--histogram\tsummary most common bytes found across files\n");
     fprintf(stderr, "\t -g,--gramsize\tminimum size of a gram used in comparisons\n");
+    fprintf(stderr, "\t -j,--jsonpretty\tpretty print of json output (default is plain)\n");
     fprintf(stderr, "\t -b,--buffersize\tchange max size for a file (default %d bytes)\n", BG_DEFAULT_BUFFERSIZE);
     fprintf(stderr, "\t -f,--maxfiles\tprocess up to maxfiles (default %d)\n\n", BG_DEFAULT_MAXFILES);
     fprintf(stderr, "\t -e,--editdist\tchange edit distance subtraction tolerance (default %d, max %d)\n", 
@@ -68,13 +70,14 @@ int main(int argc, char **argv)
         {"verbose",   no_argument,      0, 'v'},
         {"strings",   no_argument,      0, 's'},
         {"histogram", no_argument,      0, 'i'},
+        {"jsonpretty",no_argument,      0, 'j'},
         {"gramsize",  required_argument,0, 'g'},
         {"buffersize",required_argument,0, 'b'},
         {"maxfiles",  required_argument,0, 'f'},
         {0, 0, 0, 0}
     };
 
-    while ((opt = getopt_long(argc, argv, "ivsce:g:b:f:",
+    while ((opt = getopt_long(argc, argv, "jivsce:g:b:f:",
                       long_options, &option_index)) != -1)
     {
         switch (opt)
@@ -91,6 +94,7 @@ int main(int argc, char **argv)
         case 's': opt_mask|=MODE_STRINGS; break;
         case 'v': opt_mask|=MODE_VERBOSE; break;
         case 'i': opt_mask|=MODE_BYTECNT; break;
+        case 'j': opt_mask|=MODE_JSONPTY; break;
         case 'g':
             bg_mem_gramsize=atoi(optarg);
             if(bg_mem_gramsize>0 && bg_mem_gramsize<bg_mem_buffersize)
@@ -596,8 +600,11 @@ int bg_mem_show(bg_mem_t *bg_mem)
     json_object_object_add(jobj_bingram,"file", jarr_file);
     json_object_object_add(jobj_bingram,"gram", jarr_gram);
 
-    //printf ("%s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PLAIN));
-    printf ("%s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+    if(bg_mem->opt_mask & MODE_JSONPTY)
+        printf ("%s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+    else
+        printf ("%s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PLAIN));
+
     json_object_put(jobj);
 
     return 0;

@@ -43,6 +43,7 @@ typedef enum {
   MODE_VERBOSE = 0x01,
   MODE_BYTECNT = 0x02,
   MODE_STRINGS = 0x04,
+  MODE_JSONPTY = 0x08,
 } opt_mask_t;
 
 typedef struct {
